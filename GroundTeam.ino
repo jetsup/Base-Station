@@ -4,6 +4,9 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+
+#define MAX_PAYLOAD_SIZE 31
+
 const uint64_t pipeOut = 000322;  // NOTE: The same as in the receiver 000322 | Alıcı kodundaki adres ile aynı olmalı
 RF24 radio(9, 10);                // select CE,CSN pin | CE ve CSN pinlerin seçimi
 String dronePositionBuffer = "";
@@ -61,7 +64,7 @@ int Border_Map(int val, int lower, int middle, int upper, bool reverse) {
 bool logOutput = false;
 
 void loop() {
-  // Control Stick Calibration for channels  |  Her bir kanal için kumanda Kol Kalibrasyonları
+  // Control Stick Calibration for channels
   data.analogServoValueByte = Border_Map(analogRead(A5), 0, 512, 1023, false);  // "true" or "false" for change signal direction | "true" veya "false" sinyal yönünü değiştirir.
   data.releaseCarriage = !digitalRead(pushBtnPin);
 
@@ -82,9 +85,10 @@ void loop() {
 void sendControlSignal() {
   radio.openWritingPipe(pipeOut);
   radio.stopListening();
+  delay(10);
+
   prevSignal = data.analogServoValueByte;
   radio.write(&data, sizeof(data));
-  delay(10);
   Serial.println("Command sent");
 }
 
@@ -92,22 +96,27 @@ void receiveGpsData() {
   char gpsData[100] = {};
   radio.openReadingPipe(1, pipeOut);
   radio.startListening();
-  // radio.setPayloadSize(sizeof(gpsData));
   delay(10);
+
   if (radio.available()) {
     radio.read(gpsData, sizeof(gpsData));
     // radio.startListening();
     // Serial.print("$:");
     String buf = String(gpsData);
-    if (buf.startsWith("<<")) {
+    if (buf.startsWith("<$") || dronePositionBuffer.length() > 110) {
       dronePositionBuffer = buf;
+      // while (!buf.endsWith(">>")) {
+      //   radio.read(gpsData, sizeof(gpsData));
+      //   buf = String(gpsData);
+      //   dronePositionBuffer += buf;
+      // }
     } else {
       dronePositionBuffer += buf;
     }
 
-    // Serial.println(buf);
+    // Serial.println(dronePositionBuffer);
 
-    if (dronePositionBuffer.startsWith("<<") && dronePositionBuffer.endsWith(">>")
+    if (dronePositionBuffer.startsWith("<$") && dronePositionBuffer.endsWith("#>")
         && dronePositionBuffer.length() > 95 && dronePositionBuffer.length() < 105) {
       // complete sentense received
       Serial.println(dronePositionBuffer);
