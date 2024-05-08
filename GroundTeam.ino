@@ -1,15 +1,18 @@
 // 1 Channel Transmitter | 1 Kanal Verici
 // Input pin A5
 
+#include <RF24.h>
 #include <SPI.h>
 #include <nRF24L01.h>
-#include <RF24.h>
 
 #define MAX_PAYLOAD_SIZE 31
 
-const uint64_t pipeOut = 000322;  // NOTE: The same as in the receiver 000322 | Alıcı kodundaki adres ile aynı olmalı
-RF24 radio(9, 10);                // select CE,CSN pin | CE ve CSN pinlerin seçimi
+const uint64_t pipeOut = 000322;  // NOTE: The same as in the receiver 000322 |
+                                  // Alıcı kodundaki adres ile aynı olmalı
+RF24 radio(9, 10);  // select CE,CSN pin | CE ve CSN pinlerin seçimi
 String dronePositionBuffer = "";
+
+int CONNECTION_STATUS = A4;
 
 int prevSignal = 0;
 
@@ -27,16 +30,46 @@ GpsData gps;
 
 int pushBtnPin = 6;
 
+bool shouldBlink = false, state = false;
+int blinkCount = 0;
+long prevBlinkTime = 0;
+
 void ResetData() {
-  data.analogServoValueByte = 0;  // Signal lost position | Sinyal kesildiğindeki pozisyon
+  data.analogServoValueByte =
+      0;  // Signal lost position | Sinyal kesildiğindeki pozisyon
   data.releaseCarriage = false;
+}
+
+void blinkStyle() {
+  if (shouldBlink) {
+    if (blinkCount < 6) {
+      if (millis() - prevBlinkTime > 100) {
+        state = !state;
+        blinkCount++;
+        digitalWrite(CONNECTION_STATUS, state);
+        Serial.print(blinkCount);
+        prevBlinkTime = millis();
+      }
+    } else {
+      if (millis() - prevBlinkTime > 1000) {
+        blinkCount = 0;
+        digitalWrite(CONNECTION_STATUS, LOW);
+        Serial.print(blinkCount);
+      }
+    }
+  } else {
+    digitalWrite(CONNECTION_STATUS, LOW);
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   pinMode(pushBtnPin, INPUT_PULLUP);
-  //Configure the NRF24 module  | NRF24 modül konfigürasyonu
-  if (!radio.begin()) { Serial.println("NRF INIT FAILED"); }
+  pinMode(CONNECTION_STATUS, OUTPUT);
+  // Configure the NRF24 module
+  if (!radio.begin()) {
+    Serial.println("NRF INIT FAILED");
+  }
   radio.openWritingPipe(pipeOut);
 
   //
@@ -45,9 +78,13 @@ void setup() {
 
   radio.setChannel(100);
   radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);  // The lowest data rate value for more stable communication  | Daha kararlı iletişim için en düşük veri hızı.
-  radio.setPALevel(RF24_PA_MAX);    // Output power is set for maximum |  Çıkış gücü maksimum için ayarlanıyor.
-  radio.stopListening();            // Start the radio comunication for Transmitter | Verici için sinyal iletişimini başlatır.
+  radio.setDataRate(RF24_250KBPS);  // The lowest data rate value for more
+                                    // stable communication | Daha kararlı
+                                    // iletişim için en düşük veri hızı.
+  radio.setPALevel(RF24_PA_MAX);  // Output power is set for maximum |  Çıkış
+                                  // gücü maksimum için ayarlanıyor.
+  radio.stopListening();  // Start the radio comunication for Transmitter |
+                          // Verici için sinyal iletişimini başlatır.
   ResetData();
 }
 
@@ -65,9 +102,12 @@ bool logOutput = false;
 
 void loop() {
   // Control Stick Calibration for channels
-  data.analogServoValueByte = Border_Map(analogRead(A5), 0, 512, 1023, false);  // "true" or "false" for change signal direction | "true" veya "false" sinyal yönünü değiştirir.
+  blinkStyle();
+  data.analogServoValueByte =
+      Border_Map(analogRead(A5), 0, 512, 1023,
+                 false);  // "true" or "false" for change signal direction |
+                          // "true" veya "false" sinyal yönünü değiştirir.
   data.releaseCarriage = !digitalRead(pushBtnPin);
-
 
   if (data.analogServoValueByte != prevSignal || data.releaseCarriage) {
     Serial.print(map(analogRead(A5), 0, 1023, 0, 180));
@@ -116,11 +156,14 @@ void receiveGpsData() {
 
     // Serial.println(dronePositionBuffer);
 
-    if (dronePositionBuffer.startsWith("<$") && dronePositionBuffer.endsWith("#>")
-        && dronePositionBuffer.length() > 95 && dronePositionBuffer.length() < 105) {
+    if (dronePositionBuffer.startsWith("<$") &&
+        dronePositionBuffer.endsWith("#>") &&
+        dronePositionBuffer.length() > 95 &&
+        dronePositionBuffer.length() < 105) {
       // complete sentense received
       Serial.println(dronePositionBuffer);
       dronePositionBuffer = "";
+      shouldBlink = true;
     }
   }
 }
