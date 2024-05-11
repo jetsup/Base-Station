@@ -1,66 +1,4 @@
-// 1 Channel Transmitter | 1 Kanal Verici
-// Input pin A5
-
-#include <RF24.h>
-#include <SPI.h>
-#include <nRF24L01.h>
-
-#define MAX_PAYLOAD_SIZE 31
-
-const uint64_t pipeOut = 000322;  // NOTE: The same as in the receiver 000322 |
-                                  // Alıcı kodundaki adres ile aynı olmalı
-RF24 radio(9, 10);  // select CE,CSN pin | CE ve CSN pinlerin seçimi
-String dronePositionBuffer = "";
-
-int CONNECTION_STATUS = A4;
-
-int prevSignal = 0;
-
-struct Signal {
-  byte analogServoValueByte;
-  bool releaseCarriage;
-};
-
-struct GpsData {
-  char latLng[100] = {};
-};
-
-Signal data;
-GpsData gps;
-
-int pushBtnPin = 6;
-
-bool shouldBlink = false, state = false;
-int blinkCount = 0;
-long prevBlinkTime = 0;
-
-void ResetData() {
-  data.analogServoValueByte =
-      0;  // Signal lost position | Sinyal kesildiğindeki pozisyon
-  data.releaseCarriage = false;
-}
-
-void blinkStyle() {
-  if (shouldBlink) {
-    if (blinkCount < 6) {
-      if (millis() - prevBlinkTime > 100) {
-        state = !state;
-        blinkCount++;
-        digitalWrite(CONNECTION_STATUS, state);
-        Serial.print(blinkCount);
-        prevBlinkTime = millis();
-      }
-    } else {
-      if (millis() - prevBlinkTime > 1000) {
-        blinkCount = 0;
-        digitalWrite(CONNECTION_STATUS, LOW);
-        Serial.print(blinkCount);
-      }
-    }
-  } else {
-    digitalWrite(CONNECTION_STATUS, LOW);
-  }
-}
+#include "utils.h"
 
 void setup() {
   Serial.begin(115200);
@@ -72,98 +10,34 @@ void setup() {
   }
   radio.openWritingPipe(pipeOut);
 
-  //
-  // radio.openReadingPipe(2, pipeOut);
-  //
-
   radio.setChannel(100);
   radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);  // The lowest data rate value for more
-                                    // stable communication | Daha kararlı
-                                    // iletişim için en düşük veri hızı.
-  radio.setPALevel(RF24_PA_MAX);  // Output power is set for maximum |  Çıkış
-                                  // gücü maksimum için ayarlanıyor.
-  radio.stopListening();  // Start the radio comunication for Transmitter |
-                          // Verici için sinyal iletişimini başlatır.
+  radio.setDataRate(RF24_250KBPS);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.stopListening();
   ResetData();
 }
-
-// Joystick center and its borders | Joystick merkez ve sınırları
-int Border_Map(int val, int lower, int middle, int upper, bool reverse) {
-  val = constrain(val, lower, upper);
-  if (val < middle)
-    val = map(val, lower, middle, 0, 128);
-  else
-    val = map(val, middle, upper, 128, 255);
-  return (reverse ? 255 - val : val);
-}
-
-bool logOutput = false;
 
 void loop() {
   // Control Stick Calibration for channels
   blinkStyle();
   data.analogServoValueByte =
       Border_Map(analogRead(A5), 0, 512, 1023,
-                 false);  // "true" or "false" for change signal direction |
-                          // "true" veya "false" sinyal yönünü değiştirir.
+                 false);  // "true" or "false" for change signal direction
   data.releaseCarriage = !digitalRead(pushBtnPin);
 
   if (data.analogServoValueByte != prevSignal || data.releaseCarriage) {
-    Serial.print(map(analogRead(A5), 0, 1023, 0, 180));
-    Serial.print(" : ");
-    Serial.print(data.analogServoValueByte);
-    Serial.print(" : ");
-    Serial.println(data.releaseCarriage);
-
     sendControlSignal();
   }
 
   // transition to receive mode and receive geo coordinates
   receiveGpsData();
-}
-void sendControlSignal() {
-  radio.openWritingPipe(pipeOut);
-  radio.stopListening();
-  delay(10);
+  if (millis() - prevSerialLog > 20) {
+    prevSerialLog = millis();
+    logConsoleData();
+  }
 
-  prevSignal = data.analogServoValueByte;
-  radio.write(&data, sizeof(data));
-  Serial.println("Command sent");
-}
-
-void receiveGpsData() {
-  char gpsData[100] = {};
-  radio.openReadingPipe(1, pipeOut);
-  radio.startListening();
-  delay(10);
-
-  if (radio.available()) {
-    radio.read(gpsData, sizeof(gpsData));
-    // radio.startListening();
-    // Serial.print("$:");
-    String buf = String(gpsData);
-    if (buf.startsWith("<$") || dronePositionBuffer.length() > 110) {
-      dronePositionBuffer = buf;
-      // while (!buf.endsWith(">>")) {
-      //   radio.read(gpsData, sizeof(gpsData));
-      //   buf = String(gpsData);
-      //   dronePositionBuffer += buf;
-      // }
-    } else {
-      dronePositionBuffer += buf;
-    }
-
-    // Serial.println(dronePositionBuffer);
-
-    if (dronePositionBuffer.startsWith("<$") &&
-        dronePositionBuffer.endsWith("#>") &&
-        dronePositionBuffer.length() > 95 &&
-        dronePositionBuffer.length() < 105) {
-      // complete sentense received
-      Serial.println(dronePositionBuffer);
-      dronePositionBuffer = "";
-      shouldBlink = true;
-    }
+  if (nrfConnected()) {
+    shouldBlink = true;
   }
 }
