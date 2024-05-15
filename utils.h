@@ -37,7 +37,7 @@ extern GpsData gps;
 
 extern int pushBtnPin;
 
-extern bool shouldBlink, state, logOutput;
+extern bool shouldBlink, state, logOutput, packageDropped;
 extern int blinkCount;
 extern long prevBlinkTime;
 

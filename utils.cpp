@@ -18,24 +18,35 @@ GpsData gps;
 
 int pushBtnPin = 6;
 
-bool shouldBlink = false, state = false, logOutput = false;
+bool shouldBlink = false, state = false, logOutput = false,
+     packageDropped = false;
 int blinkCount = 0;
 long prevBlinkTime = 0;
 
+// TODO remove redundancy
 void blinkStyle() {
   if (shouldBlink) {
-    if (blinkCount < 6) {
-      if (millis() - prevBlinkTime > 100) {
-        state = !state;
-        blinkCount++;
-        digitalWrite(CONNECTION_STATUS, state);
-        prevBlinkTime = millis();
+    if (millis() - prevReception < 5000) {
+      if (!packageDropped) {
+        if (blinkCount < 6) {
+          if (millis() - prevBlinkTime > 100) {
+            state = !state;
+            blinkCount++;
+            digitalWrite(CONNECTION_STATUS, state);
+            prevBlinkTime = millis();
+          }
+        } else {
+          if (millis() - prevBlinkTime > 1000) {
+            blinkCount = 0;
+            digitalWrite(CONNECTION_STATUS, LOW);
+          }
+        }
+      } else {
+        digitalWrite(CONNECTION_STATUS, HIGH);
       }
     } else {
-      if (millis() - prevBlinkTime > 1000) {
-        blinkCount = 0;
-        digitalWrite(CONNECTION_STATUS, LOW);
-      }
+      // lost contact with the air module
+      digitalWrite(CONNECTION_STATUS, LOW);
     }
   } else {
     digitalWrite(CONNECTION_STATUS, LOW);
@@ -151,6 +162,11 @@ void receiveGpsData() {
       buf.replace("<D", "");
       buf.replace("D>", "");
       currentDistanceFromBase = buf;
+      prevReception = millis();
+    } else if (buf.startsWith("<PS") && buf.endsWith("PS>")) {
+      buf.replace("<PS", "");
+      buf.replace("PS>", "");
+      packageDropped = (bool)buf.toInt();
       prevReception = millis();
     }
   }

@@ -34,6 +34,7 @@ void loop() {
   receiveGpsData();
   if (millis() - prevSerialLog > 20) {
     prevSerialLog = millis();
+    // TODO: check if there is data first
     logConsoleData();
   }
 
