@@ -1,3 +1,4 @@
+#include "Arduino.h"
 #include "utils.h"
 
 RF24 radio(9, 10);  // select CE,CSN pin
@@ -6,7 +7,7 @@ String dronePositionBuffer = "";
 int CONNECTION_STATUS = A4;
 
 int prevSignal = 0;
-long prevSerialLog = 0, prevReception = 0;
+long prevSerialLog = 0, prevReception = 0, prevRapidToggle = 0;
 
 // double was rounding off
 String baseLat, baseLng, baseAlt, currentLat, currentLng, currentAlt,
@@ -19,14 +20,14 @@ GpsData gps;
 int pushBtnPin = 6;
 
 bool shouldBlink = false, state = false, logOutput = false,
-     packageDropped = false;
+     packageDropped = false, rapidToggle = false;
 int blinkCount = 0;
 long prevBlinkTime = 0;
 
 // TODO remove redundancy
 void blinkStyle() {
   if (shouldBlink) {
-    if (millis() - prevReception < 5000) {
+    if (millis() - prevReception < 500) {
       if (!packageDropped) {
         if (blinkCount < 6) {
           if (millis() - prevBlinkTime > 100) {
@@ -46,10 +47,22 @@ void blinkStyle() {
       }
     } else {
       // lost contact with the air module
-      digitalWrite(CONNECTION_STATUS, LOW);
+      if (millis() - prevReception > 5000) {
+        digitalWrite(CONNECTION_STATUS, LOW);
+      } else {
+        blinkRapidly();
+      }
     }
   } else {
     digitalWrite(CONNECTION_STATUS, LOW);
+  }
+}
+
+void blinkRapidly(){
+  if(millis() - prevRapidToggle > 50){
+    rapidToggle = !rapidToggle;
+    digitalWrite(CONNECTION_STATUS, rapidToggle);
+    prevRapidToggle = millis();
   }
 }
 
@@ -62,8 +75,24 @@ int Border_Map(int val, int lower, int middle, int upper, bool reverse) {
   return (reverse ? 255 - val : val);
 }
 
+bool nrfInit(){
+  if (!radio.begin()) {
+    // Serial.println("NRF INIT FAILED");
+  }
+  radio.openWritingPipe(pipeOut);
+
+  radio.setChannel(100);
+  radio.setAutoAck(false);
+  radio.setDataRate(RF24_250KBPS);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.stopListening();
+}
+
 bool nrfConnected() {
   if (millis() - prevReception > 5000) {
+    shouldBlink = false;
+    // TODO add a timeout
+    nrfInit();
     return false;
   }
 

@@ -5,16 +5,7 @@ void setup() {
   pinMode(pushBtnPin, INPUT_PULLUP);
   pinMode(CONNECTION_STATUS, OUTPUT);
   // Configure the NRF24 module
-  if (!radio.begin()) {
-    Serial.println("NRF INIT FAILED");
-  }
-  radio.openWritingPipe(pipeOut);
-
-  radio.setChannel(100);
-  radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_MAX);
-  radio.stopListening();
+  nrfInit();
   ResetData();
 }
 

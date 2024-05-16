@@ -43,6 +43,8 @@ extern long prevBlinkTime;
 
 void ResetData();
 void blinkStyle();
+void blinkRapidly();
+bool nrfInit();
 bool nrfConnected();
 void logConsoleData();
 void sendControlSignal();
