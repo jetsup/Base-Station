@@ -1,10 +1,11 @@
-#include "Arduino.h"
 #include "utils.h"
+
+#include "Arduino.h"
 
 RF24 radio(9, 10);  // select CE,CSN pin
 String dronePositionBuffer = "";
 
-int CONNECTION_STATUS = A4;
+int CONNECTION_STATUS, GREEN_STATUS = 3, RED_STATUS = 4, BLUE_STATUS = 2;
 
 int prevSignal = 0;
 long prevSerialLog = 0, prevReception = 0, prevRapidToggle = 0;
@@ -24,42 +25,65 @@ bool shouldBlink = false, state = false, logOutput = false,
 int blinkCount = 0;
 long prevBlinkTime = 0;
 
+void turnOffLEDs(int led1, int led2) {
+  digitalWrite(led1, LOW);
+  digitalWrite(led2, LOW);
+}
+
+void patternBlink() {
+  if (blinkCount < 6) {
+    if (millis() - prevBlinkTime > 100) {
+      state = !state;
+      blinkCount++;
+      digitalWrite(CONNECTION_STATUS, state);
+      prevBlinkTime = millis();
+    }
+  } else {
+    if (millis() - prevBlinkTime > 1000) {
+      blinkCount = 0;
+      digitalWrite(CONNECTION_STATUS, LOW);
+    }
+  }
+}
+
 // TODO remove redundancy
 void blinkStyle() {
   if (shouldBlink) {
     if (millis() - prevReception < 500) {
       if (!packageDropped) {
-        if (blinkCount < 6) {
-          if (millis() - prevBlinkTime > 100) {
-            state = !state;
-            blinkCount++;
-            digitalWrite(CONNECTION_STATUS, state);
-            prevBlinkTime = millis();
-          }
-        } else {
-          if (millis() - prevBlinkTime > 1000) {
-            blinkCount = 0;
-            digitalWrite(CONNECTION_STATUS, LOW);
-          }
-        }
+        CONNECTION_STATUS = GREEN_STATUS;  // package on board
+        turnOffLEDs(RED_STATUS, BLUE_STATUS);
       } else {
-        digitalWrite(CONNECTION_STATUS, HIGH);
+        CONNECTION_STATUS = BLUE_STATUS;  // package dropped
+        turnOffLEDs(RED_STATUS, GREEN_STATUS);
       }
+
+      patternBlink();
+
     } else {
       // lost contact with the air module
       if (millis() - prevReception > 5000) {
-        digitalWrite(CONNECTION_STATUS, LOW);
+        turnOffLEDs(GREEN_STATUS, BLUE_STATUS);
+        CONNECTION_STATUS = RED_STATUS;
+        patternBlink();
       } else {
+        if (!packageDropped) {
+          CONNECTION_STATUS = GREEN_STATUS;
+        } else {
+          CONNECTION_STATUS = BLUE_STATUS;
+        }
         blinkRapidly();
       }
     }
   } else {
-    digitalWrite(CONNECTION_STATUS, LOW);
+    // digitalWrite(CONNECTION_STATUS, LOW);
+    CONNECTION_STATUS = RED_STATUS;
+    patternBlink();
   }
 }
 
-void blinkRapidly(){
-  if(millis() - prevRapidToggle > 50){
+void blinkRapidly() {
+  if (millis() - prevRapidToggle > 50) {
     rapidToggle = !rapidToggle;
     digitalWrite(CONNECTION_STATUS, rapidToggle);
     prevRapidToggle = millis();
@@ -75,10 +99,8 @@ int Border_Map(int val, int lower, int middle, int upper, bool reverse) {
   return (reverse ? 255 - val : val);
 }
 
-bool nrfInit(){
-  if (!radio.begin()) {
-    // Serial.println("NRF INIT FAILED");
-  }
+void nrfInit() {
+  radio.begin();
   radio.openWritingPipe(pipeOut);
 
   radio.setChannel(100);
@@ -104,27 +126,13 @@ bool nrfConnected() {
 }
 
 void logConsoleData() {
-  Serial.print("<");
-  Serial.print(baseLat);
-  Serial.print(",");
-  Serial.print(baseLng);
-  Serial.print(",");
-  Serial.print(baseAlt);
-  Serial.print("|");
-  Serial.print(currentLat);
-  Serial.print(",");
-  Serial.print(currentLng);
-  Serial.print(",");
-  Serial.print(currentTime);
-  Serial.print(",");
-  Serial.print(currentAlt);
-  Serial.print(",");
-  Serial.print(currentSpeed);
-  Serial.print(",");
-  Serial.print(currentCourse);
-  Serial.print(",");
-  Serial.print(currentDistanceFromBase);
-  Serial.println(">");
+  // TODO: Simplify all this using a variable
+  String consoleData = "<" + baseLat + "," + baseLng + "," + baseAlt + "|" +
+                       currentLat + "," + currentLng + "," + currentTime + "," +
+                       currentAlt + "," + currentSpeed + "," + currentCourse +
+                       "," + currentDistanceFromBase + ">";
+
+  Serial.println(consoleData);
 }
 
 void sendControlSignal() {

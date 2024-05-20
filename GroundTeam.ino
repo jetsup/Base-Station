@@ -2,8 +2,12 @@
 
 void setup() {
   Serial.begin(115200);
+
   pinMode(pushBtnPin, INPUT_PULLUP);
-  pinMode(CONNECTION_STATUS, OUTPUT);
+  
+  pinMode(RED_STATUS, OUTPUT);
+  pinMode(GREEN_STATUS, OUTPUT);
+  pinMode(BLUE_STATUS, OUTPUT);
   // Configure the NRF24 module
   nrfInit();
   ResetData();

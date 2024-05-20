@@ -13,7 +13,7 @@ static const uint64_t pipeOut =
 extern RF24 radio;  // select CE,CSN pin
 extern String dronePositionBuffer;
 
-extern int CONNECTION_STATUS;
+extern int CONNECTION_STATUS, RED_STATUS, GREEN_STATUS, BLUE_STATUS;
 
 extern int prevSignal;
 extern long prevSerialLog, prevReception;
@@ -44,7 +44,10 @@ extern long prevBlinkTime;
 void ResetData();
 void blinkStyle();
 void blinkRapidly();
-bool nrfInit();
+/**
+ * @brief  Initialize the NRF24 module
+ */
+void nrfInit();
 bool nrfConnected();
 void logConsoleData();
 void sendControlSignal();
